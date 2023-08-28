@@ -1,2 +1,3 @@
 pyhanko
 httpx
+cryptography

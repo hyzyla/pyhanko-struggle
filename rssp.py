@@ -9,6 +9,10 @@ from pyhanko.keys import load_cert_from_pemder
 from pyhanko.sign import Signer
 from pyhanko.sign.general import load_cert_from_pemder
 from pyhanko_certvalidator.registry import SimpleCertificateStore
+import time
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization
 
 # import logging
 # logging.basicConfig(
@@ -27,16 +31,47 @@ class RSSPClient:
         self.rp_key = pathlib.Path("rssp.key").read_text()
         self.refresh_token = "-EowQhb5L22B5KHuv0FXRdTpKXEbUmt8/XpDyhS/2wENtvMt_Rh8tRvuZ3dr/1xDZul0B4aXMipMNmdyBw9f9gAB5DUE185PWjF-Ukbei9tj2NLchtz8_UIIRYz4scCgOMOaZ1sjesMrpoTMoplcKX2VEQx6Of90Yg-XHVDrkymhItjf89grm.Vv/NIqsZZaTzYI1PlgzgfrhooUlFsWWo7lR/ssNBH41JQ6ZYqdyA6k6FAfTQNGPDIo-IJHE8KZ"
 
+
+    def generate_authorization(self):
+        timestamp = int(time.time() * 1000)
+        print(timestamp)
+        data2sign = self.rp_user + self.rp_password + self.rp_signature + str(timestamp)
+
+        # Initialize the signer
+        private_key = serialization.load_pem_private_key(
+            self.rp_key.encode(),
+            password=None
+        )
+        pkcs1_signature = private_key.sign(
+            data2sign.encode(),
+            padding=padding.PKCS1v15(),
+            algorithm=hashes.SHA1()
+        )
+
+        # Convert the binary signature to Base64
+        pkcs1_signature_base64 = base64.b64encode(pkcs1_signature).decode()
+
+        credentials = base64.b64encode(
+            (self.rp_user + ':' + self.rp_password + ':' + self.rp_signature + ':' + str(timestamp) + ':' + pkcs1_signature_base64).encode()
+        ).decode()
+
+        username = 'user_20230816'
+        password = '12345678'
+        authorization = 'SSL2 ' + credentials + ', Basic ' + base64.b64encode(('USERNAME' + ':' + username + ':' + password).encode()).decode()
+        print(authorization)
+        return authorization
+
     def login(self) -> str:
         response = httpx.post(
             "https://rssp.mobile-id.vn/rssp/v2/auth/login",
             json={
                 "relyingParty": "RSSP",
-                "rememberMeEnabled": True,
+                "rememberMeEnabled": False,
                 "profile": "rssp-119.432-v2.0",
                 "lang": "EN",
             },
-            headers={"Authorization": f"Bearer {self.refresh_token}"},
+            # headers={"Authorization": f"Bearer {self.refresh_token}"},
+            headers={"Authorization": self.generate_authorization()},
         )
         data = response.json()
         print("Login response:")
